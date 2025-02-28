@@ -1,0 +1,44 @@
+# Programar downtime en nagios para GEXSVDBP02
+- name: Programar downtime en Nagios para GEXSVDBP02
+  hosts: nagios_server
+  #hosts: GEXSVDBP02
+  gather_facts: yes
+  become: yes
+
+# Variables que se utilizarán a lo largo del playbook.
+  vars:
+    nagios_host: "GEXSVDBP02"
+    start_hour: 1
+    end_hour: 5
+    comment: "Planificado"
+# Tareas
+  tasks:
+# Obtener fecha actual del servidor local
+    - name: Obtener fecha actual del servidor local
+      set_fact:
+        current_date: "{{ ansible_date_time.date }}"
+
+    - name: Calcular tiempo de inicio y fin del downtime
+      set_fact:
+        start_time: "{{ current_date }} {{ '%02d' % start_hour }}:00:00"
+        end_time: "{{ current_date }} {{ '%02d' % end_hour }}:00:00"
+
+    - name: Convertir tiempos a formato epoch
+      set_fact:
+        start_epoch: "{{ (start_time | to_datetime('%Y-%m-%d %H:%M:%S')).strftime('%s') }}"
+        end_epoch: "{{ (end_time | to_datetime('%Y-%m-%d %H:%M:%S')).strftime('%s') }}"
+
+# Programar Downtime para GEXSVDBP02
+    - name: Programar downtime usando comando directo
+      shell: |
+        echo "[$(date +%s)] SCHEDULE_HOST_DOWNTIME;{{ nagios_host }};{{ start_epoch }};{{ end_epoch }};1;0;{{ (end_epoch | int - start_epoch | int) // 60 }};Ansible;{{ comment }}" > /usr/local/nagios/var/rw/nagios.cmd
+      become: yes
+
+    - name: Asegurar permisos correctos del comando
+      shell: |
+        chown nagios:nagios /usr/local/nagios/var/rw/nagios.cmd
+      become: yes
+
+    - name: Mostrar confirmación
+      debug:
+        msg: "Downtime programado para GEXSVDBP02 desde {{ start_time }} hasta {{ end_time }} con el comentario '{{ comment }}'"
